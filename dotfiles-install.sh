@@ -1,4 +1,4 @@
-#!/usr/bin/dash
+#!/bin/sh
 
 script_bname="${0##*/}"
 repo_url="https://github.com/Dillon7c7/Dotfiles"
