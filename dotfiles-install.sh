@@ -21,8 +21,17 @@ _error_and_exit()
 	exit 1
 }
 
+# handle unexpected signals
+handle_signals()
+{
+	printf '%b\n' "$(tput setaf 3)Trap caught! Removing ${dotgit_dir} and ${dotgit_temp}$(tput sgr0)"
+	rm -rfv "$dotgit_dir"
+	rm -rfv "$dotgit_temp"
+	exit 2
+}
+
 # make sure git is installed
-if ! command -v /usr/bin/git 2>&1 >/dev/null; then
+if ! command -v /usr/bin/git >/dev/null 2>&1; then
 	_error_and_exit "/usr/bin/git not found!"
 fi
 
@@ -30,9 +39,13 @@ fi
 [ ! -e "$dotgit_dir" ] || _error_and_exit "$dotgit_dir already exists! Either rename it, or edit the script."
 [ ! -e "$dotgit_temp" ] || _error_and_exit "$dotgit_temp already exists! Either rename it, or edit the script."
 
+# the trap is placed AFTER the dir checking; we wouldn't want to remove a previously existing dir!
+trap 'handle_signals' HUP INT QUIT TERM 
+
 # clone git repo!
-/usr/bin/git clone --separate-git-dir="$dotgit_dir" "$repo_url" "$dotgit_temp"
-[ $? -eq 0 ] || _error_and_exit "git clone failed. Check your internet connection."
+if ! /usr/bin/git clone --separate-git-dir="$dotgit_dir" "$repo_url" "$dotgit_temp"; then
+	_error_and_exit "git clone failed. Check your internet connection, and also make sure git is installed."
+fi
 
 # $XDG* are exported in .profile, however that hasn't been sourced yet, so we export it here
 ## this prevents the dotgit alias in ~/.bash_aliases from breaking
@@ -41,8 +54,11 @@ export XDG_CONFIG_HOME="$HOME/.config"
 # move files from temp dir to $HOME and rm the temp dir
 cp -rTv "$dotgit_temp" ~ && rm -rfv "$dotgit_temp" && . ~/.bash_aliases || _error_and_exit "Error cping or rming files!"
 
-dotgit config status.showUntrackedFiles no
-[ $? -eq 0 ] && _print_success "Dotfiles installed!" || _error_and_exit "Something broke! Perhaps check ~/.bash_aliases"
+if dotgit config status.showUntrackedFiles no >/dev/null 2>&1; then
+	_print_success "Dotfiles installed!"
+else
+	_error_and_exit "Something broke! Perhaps check ~/.bash_aliases"
+fi
 
 printf '%b\n' "$(tput setaf 5)Deleting this script now...$(tput sgr0)"
 exec rm -vf "$0"
