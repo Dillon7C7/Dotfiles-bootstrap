@@ -3,8 +3,11 @@
 script_bname="${0##*/}"
 repo_url="https://github.com/Dillon7c7/Dotfiles"
 
-dotgit_dir="${XDG_CONFIG_HOME:-${HOME}/.config}/dotfiles.git"
-dotgit_temp="${XDG_CACHE_HOME:-${HOME}/.cache}/dotfiles-temp"
+config_home="${HOME}/.config"
+cache_home="${HOME}/.cache"
+
+dotgit_dir="${config_home}/dotfiles.git"
+dotgit_temp="${cache_home}/dotfiles-temp"
 
 # print success message to stdin
 _print_success()
@@ -35,24 +38,22 @@ if ! command -v /usr/bin/git >/dev/null 2>&1; then
 	_error_and_exit "/usr/bin/git not found!"
 fi
 
-# make sure the files we will use don't already exist
+# make sure the directories we will use don't already exist
 [ ! -e "$dotgit_dir" ] || _error_and_exit "$dotgit_dir already exists! Either rename it, or edit the script."
 [ ! -e "$dotgit_temp" ] || _error_and_exit "$dotgit_temp already exists! Either rename it, or edit the script."
 
 # the trap is placed AFTER the dir checking; we wouldn't want to remove a previously existing dir!
-trap 'handle_signals' HUP INT QUIT TERM 
+trap 'handle_signals' HUP INT QUIT TERM
+
+mkdir -p "$config_home" "$cache_home"
 
 # clone git repo!
 if ! /usr/bin/git clone --separate-git-dir="$dotgit_dir" "$repo_url" "$dotgit_temp"; then
 	_error_and_exit "git clone failed. Check your internet connection, and also make sure git is installed."
 fi
 
-# $XDG* are exported in .profile, however that hasn't been sourced yet, so we export it here
-## this prevents the dotgit alias in ~/.bash_aliases from breaking
-export XDG_CONFIG_HOME="$HOME/.config"
-
 # move files from temp dir to $HOME and rm the temp dir
-cp -rTv "$dotgit_temp" ~ && rm -rfv "$dotgit_temp" && . ~/.bash_aliases || _error_and_exit "Error cping or rming files!"
+cp -rTv "$dotgit_temp" ~ && rm -rfv "$dotgit_temp" && . ~/.profile || _error_and_exit "Error cping or rming files!"
 
 if dotgit config status.showUntrackedFiles no >/dev/null 2>&1; then
 	_print_success "Dotfiles installed!"
