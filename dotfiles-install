@@ -1,4 +1,4 @@
-#!/bin/sh
+# This file must be sourced from your current (POSIX-Compliant) shell: do not run directly
 
 script_bname="${0##*/}"
 repo_url="https://github.com/Dillon7c7/Dotfiles"
@@ -53,13 +53,10 @@ if ! /usr/bin/git clone --separate-git-dir="$dotgit_dir" "$repo_url" "$dotgit_te
 fi
 
 # move files from temp dir to $HOME and rm the temp dir
-cp -rTv "$dotgit_temp" ~ && rm -rfv "$dotgit_temp" && . ~/.profile || _error_and_exit "Error cping or rming files!"
+cp -frTv "$dotgit_temp" ~ && rm -rfv "$dotgit_temp" && . ~/.profile || _error_and_exit "Error cping or rming files!"
 
 if dotgit config status.showUntrackedFiles no >/dev/null 2>&1; then
 	_print_success "Dotfiles installed!"
 else
 	_error_and_exit "Something broke! Perhaps check ~/.bash_aliases"
 fi
-
-printf '%b\n' "$(tput setaf 5)Deleting this script now...$(tput sgr0)"
-exec rm -vf "$0"
