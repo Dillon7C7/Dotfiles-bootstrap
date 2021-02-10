@@ -21,29 +21,20 @@ _error_and_exit()
 {
 	error_msg="$1"
 	printf '%b\n' "$(tput setaf 3)ERROR ${script_bname}: $(tput setaf 1)${error_msg}$(tput sgr0)" >&2
-	exit 1
-}
-
-# handle unexpected signals
-handle_signals()
-{
-	printf '%b\n' "$(tput setaf 3)Trap caught! Removing ${dotgit_dir} and ${dotgit_temp}$(tput sgr0)"
-	rm -rfv "$dotgit_dir"
+	printf '%b\n' "$(tput setaf 3)Removing ${dotgit_dir} and ${dotgit_temp}$(tput sgr0)" >&2
 	rm -rfv "$dotgit_temp"
-	exit 2
+	rm -rfv "$dotgit_dir"
+	exit 1
 }
 
 # make sure git is installed
 if ! command -v /usr/bin/git >/dev/null 2>&1; then
-	_error_and_exit "/usr/bin/git not found!"
+	_error_and_exit "/usr/bin/git not found! Please install git."
 fi
 
 # make sure the directories we will use don't already exist
 [ ! -e "$dotgit_dir" ] || _error_and_exit "$dotgit_dir already exists! Either rename it, or edit the script."
 [ ! -e "$dotgit_temp" ] || _error_and_exit "$dotgit_temp already exists! Either rename it, or edit the script."
-
-# the trap is placed AFTER the dir checking; we wouldn't want to remove a previously existing dir!
-trap 'handle_signals' HUP INT QUIT TERM
 
 mkdir -p "$config_home" "$cache_home"
 
@@ -53,7 +44,8 @@ if ! /usr/bin/git clone --separate-git-dir="$dotgit_dir" "$repo_url" "$dotgit_te
 fi
 
 # move files from temp dir to $HOME and rm the temp dir
-cp -frTv "$dotgit_temp" ~ && rm -rfv "$dotgit_temp" && . ~/.profile || _error_and_exit "Error cping or rming files!"
+# leading '\' indicates to not use an alias (in this case to avoid the common cp='cp -i', which prompts before overwrites)
+\cp -frTv "$dotgit_temp" ~ && rm -rfv "$dotgit_temp" && . ~/.profile || _error_and_exit "Error cping or rming files!"
 
 if dotgit config status.showUntrackedFiles no >/dev/null 2>&1; then
 	_print_success "Dotfiles installed!"
