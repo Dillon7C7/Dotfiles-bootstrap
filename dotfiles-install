@@ -17,38 +17,43 @@ _print_success()
 }
 
 # print error message to stderr (with colors!!), and exit
-_error_and_return()
+# $1: error message
+# $2: if given, remove dotgit temp and git directories
+_error()
 {
 	error_msg="$1"
-	printf '%b\n' "$(tput setaf 3)ERROR ${script_bname}: $(tput setaf 1)${error_msg}$(tput sgr0)" >&2
-	printf '%b\n' "$(tput setaf 3)Removing ${dotgit_dir} and ${dotgit_temp}$(tput sgr0)" >&2
-	rm -rfv "$dotgit_temp"
-	rm -rfv "$dotgit_dir"
+	printf '%b\n' "$(tput setaf 3)ERROR ${script_bname}: $(tput setaf 1)${error_msg}$(tput sgr0)"
+
+	if [ "$2" = dirs ]; then
+		printf '%b\n' "$(tput setaf 3)Removing ${dotgit_temp} and ${dotgit_dir}$(tput sgr0)"
+		rm -rfv "$dotgit_temp" "$dotgit_dir"
+	fi
+
 	return 1
-}
+} >&2
 
 # make sure git is installed
 if ! command -v /usr/bin/git >/dev/null 2>&1; then
-	_error_and_return "/usr/bin/git not found! Please install git."
+	_error "/usr/bin/git not found! Please install git."
 fi
 
 # make sure the directories we will use don't already exist
-[ ! -e "$dotgit_dir" ] || _error_and_return "$dotgit_dir already exists! Either rename it, or edit the script."
-[ ! -e "$dotgit_temp" ] || _error_and_return "$dotgit_temp already exists! Either rename it, or edit the script."
+[ ! -e "$dotgit_dir"  ] || _error "$dotgit_dir already exists! Either rename it, or edit the script."
+[ ! -e "$dotgit_temp" ] || _error "$dotgit_temp already exists! Either rename it, or edit the script."
 
 mkdir -p "$config_home" "$cache_home"
 
 # clone git repo!
 if ! /usr/bin/git clone --separate-git-dir="$dotgit_dir" "$repo_url" "$dotgit_temp"; then
-	_error_and_return "git clone failed. Check your internet connection, and also make sure git is installed."
+	_error "git clone failed. Check your internet connection, and also make sure git is installed." dirs
 fi
 
 # move files from temp dir to $HOME and rm the temp dir
 # leading '\' indicates to not use an alias (in this case to avoid the common cp='cp -i', which prompts before overwrites)
-\cp -frTv "$dotgit_temp" ~ && rm -rfv "$dotgit_temp" && . ~/.profile || _error_and_return "Error cping or rming files!"
+\cp -frTv "$dotgit_temp" ~ && rm -rfv "$dotgit_temp" && . ~/.profile || _error "Error cping or rming files!" dirs
 
 if dotgit config status.showUntrackedFiles no >/dev/null 2>&1; then
 	_print_success "Dotfiles installed!"
 else
-	_error_and_return "Something broke! Perhaps check ~/.bash_aliases"
+	_error "Unable to set 'dotgit' repo option! Perhaps check ~/.bash_aliases" dirs
 fi
