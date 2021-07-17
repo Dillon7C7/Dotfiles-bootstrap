@@ -31,25 +31,19 @@ _error()
 
 # POSIX-compliant reasonable test to see if script was sourced, based on binary filenames of shells.
 # Source: https://stackoverflow.com/questions/2683279/how-to-detect-if-a-script-is-being-sourced
-_check_if_sourced()
-{
-	# return 0 if sourced
-	if [ -n "$BASH_VERSION" ]; then
-		(return 0 2>/dev/null) && return 0
-	elif [ -n "$ZSH_EVAL_CONTEXT" ]; then
-		case $ZSH_EVAL_CONTEXT in *:file) return 0;; esac
-	elif [ -n "$KSH_VERSION" ]; then
-		[ "$(cd $(dirname -- $0) && pwd -P)/$(basename -- $0)" != "$(cd $(dirname -- ${.sh.file}) && pwd -P)/$(basename -- ${.sh.file})" ] && return 0
-	else
-		case "${0##*/}" in sh|-sh|dash|-dash) return 0 ;; esac
-	fi
-
-	# not sourced, return 1
-	return 1
-}
+sourced=0
+if [ -n "$BASH_VERSION" ]; then
+	(return 0 2>/dev/null) && sourced=1
+elif [ -n "$ZSH_EVAL_CONTEXT" ]; then
+	case $ZSH_EVAL_CONTEXT in *:file) sourced=1;; esac
+elif [ -n "$KSH_VERSION" ]; then
+	[ "$(cd $(dirname -- $0) && pwd -P)/$(basename -- $0)" != "$(cd $(dirname -- ${.sh.file}) && pwd -P)/$(basename -- ${.sh.file})" ] && sourced=1
+else
+	case "${0##*/}" in sh|-sh|dash|-dash) sourced=1;; esac
+fi
 
 # make sure script is sourced
-_check_if_sourced || { _error "This file must be sourced!"; return 1; }
+[ $sourced -eq 1 ]  || { _error "This file must be sourced!"; exit 1; }
 
 # make sure git is installed
 if ! command -v /usr/bin/git >/dev/null 2>&1; then
