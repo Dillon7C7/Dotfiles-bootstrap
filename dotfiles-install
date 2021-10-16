@@ -68,12 +68,20 @@ fi
 
 # move files from temp dir to $HOME and rm the temp dir
 # command ignores aliases (in this case we want to avoid the common cp='cp -i', which prompts before overwrites)
-command cp -frTv "$dotfiles_temp" ~ && rm -rfv "$dotfiles_temp" && . ~/.profile || { error "Error cping or rming files!"; rmdirs; return 1; }
+command cp -rfvT "$dotfiles_temp" ~ && rm -rfv "$dotfiles_temp" && . ~/.profile || { error "Error cping or rming files!"; rmdirs; return 1; }
 
-if dotfiles config status.showUntrackedFiles no >/dev/null; then
-	print_success "Dotfiles installed!"
-else
+if ! dotfiles config status.showUntrackedFiles no >/dev/null; then
 	error "Unable to set 'dotfiles' repo option! Perhaps check ~/.bash_aliases"
 	rmdirs
 	return 1
 fi
+
+if [ ! -d "${HOME}/.git" ]; then
+	rm -f "${HOME}/.git"
+else
+	error "${HOME}/.git directory exists, please remove it."
+	rmdirs
+	return 1
+fi
+
+print_success "Dotfiles installed!"
