@@ -5,8 +5,8 @@ repo_url="https://github.com/Dillon7c7/Dotfiles"
 config_home="${HOME}/.config"
 cache_home="${HOME}/.cache"
 
-dotgit_dir="${config_home}/dotfiles.git"
-dotgit_temp="${cache_home}/dotfiles-temp"
+dotfiles_dir="${config_home}/dotfiles.git"
+dotfiles_temp="${cache_home}/dotfiles-temp"
 
 sourced=0
 
@@ -27,8 +27,8 @@ error()
 # if the script fails at any point after the *dotfiles* dirs are created, remove them
 rmdirs()
 {
-	printf '%b\n' "$(tput setaf 3)Removing ${dotgit_temp} and ${dotgit_dir}$(tput sgr0)"
-	rm -rfv "$dotgit_temp" "$dotgit_dir"
+	printf '%b\n' "$(tput setaf 3)Removing ${dotfiles_temp} and ${dotfiles_dir}$(tput sgr0)"
+	rm -rfv "$dotfiles_temp" "$dotfiles_dir"
 } >&2
 
 
@@ -54,13 +54,13 @@ if ! command -v /usr/bin/git >/dev/null 2>&1; then
 fi
 
 # make sure the directories we will use don't already exist
-[ ! -e "$dotgit_dir"  ] || { error "$dotgit_dir already exists! Either rename it, or edit the script."; return 1; }
-[ ! -e "$dotgit_temp" ] || { error "$dotgit_temp already exists! Either rename it, or edit the script."; return 1; }
+[ ! -e "$dotfiles_dir"  ] || { error "$dotfiles_dir already exists! Either rename it, or edit the script."; return 1; }
+[ ! -e "$dotfiles_temp" ] || { error "$dotfiles_temp already exists! Either rename it, or edit the script."; return 1; }
 
 mkdir -p "$config_home" "$cache_home"
 
 # clone git repo!
-if ! /usr/bin/git clone --separate-git-dir="$dotgit_dir" "$repo_url" "$dotgit_temp"; then
+if ! /usr/bin/git clone --separate-git-dir="$dotfiles_dir" "$repo_url" "$dotfiles_temp"; then
 	error "git clone failed; check your internet connection."
 	rmdirs
 	return 1
@@ -68,12 +68,12 @@ fi
 
 # move files from temp dir to $HOME and rm the temp dir
 # command ignores aliases (in this case we want to avoid the common cp='cp -i', which prompts before overwrites)
-command cp -frTv "$dotgit_temp" ~ && rm -rfv "$dotgit_temp" && . ~/.profile || { error "Error cping or rming files!"; rmdirs; return 1; }
+command cp -frTv "$dotfiles_temp" ~ && rm -rfv "$dotfiles_temp" && . ~/.profile || { error "Error cping or rming files!"; rmdirs; return 1; }
 
-if dotgit config status.showUntrackedFiles no >/dev/null 2>&1; then
+if dotfiles config status.showUntrackedFiles no >/dev/null; then
 	print_success "Dotfiles installed!"
 else
-	error "Unable to set 'dotgit' repo option! Perhaps check ~/.bash_aliases"
+	error "Unable to set 'dotfiles' repo option! Perhaps check ~/.bash_aliases"
 	rmdirs
 	return 1
 fi
