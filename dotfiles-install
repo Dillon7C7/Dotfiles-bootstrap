@@ -53,6 +53,12 @@ if ! command -v /usr/bin/git >/dev/null 2>&1; then
 	return 1
 fi
 
+# if a git repository already exists in $HOME, don't make any changes
+if [ -d "${HOME}/.git" ]; then
+	error "${HOME}/.git directory exists! (Re)move the repository in $HOME to continue."
+	return 1
+fi
+
 # make sure the directories we will use don't already exist
 [ ! -e "$dotfiles_dir"  ] || { error "$dotfiles_dir already exists! Either rename it, or edit the script."; return 1; }
 [ ! -e "$dotfiles_temp" ] || { error "$dotfiles_temp already exists! Either rename it, or edit the script."; return 1; }
@@ -76,12 +82,7 @@ if ! dotfiles config status.showUntrackedFiles no >/dev/null; then
 	return 1
 fi
 
-if [ ! -d "${HOME}/.git" ]; then
-	rm -f "${HOME}/.git"
-else
-	error "${HOME}/.git directory exists, please remove it."
-	rmdirs
-	return 1
-fi
+# the only entry in this file allows using 'git' under $HOME to modify the dotfiles repo; we don't want that
+rm -f "${HOME}/.git"
 
 print_success "Dotfiles installed!"
