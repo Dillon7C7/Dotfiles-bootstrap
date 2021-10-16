@@ -8,30 +8,32 @@ cache_home="${HOME}/.cache"
 dotgit_dir="${config_home}/dotfiles.git"
 dotgit_temp="${cache_home}/dotfiles-temp"
 
+sourced=0
+
 # print success message to stdin
-_print_success()
+print_success()
 {
 	msg="$1"
 	printf '%b\n' "$(tput setaf 3)SUCCESS dotfiles-install: $(tput setaf 2)${msg}$(tput sgr0)"
 }
 
-# print error message to stderr (with colors!!), and exit
-# $1: error message
-# $2: if given, remove dotgit temp and git directories
-_error()
+# print error message $1 to stderr
+error()
 {
 	error_msg="$1"
 	printf '%b\n' "$(tput setaf 3)ERROR dotfiles-install: $(tput setaf 1)${error_msg}$(tput sgr0)"
-
-	if [ "$2" = rmdirs ]; then
-		printf '%b\n' "$(tput setaf 3)Removing ${dotgit_temp} and ${dotgit_dir}$(tput sgr0)"
-		rm -rfv "$dotgit_temp" "$dotgit_dir"
-	fi
 } >&2
+
+# if the script fails at any point after the *dotfiles* dirs are created, remove them
+rmdirs()
+{
+	printf '%b\n' "$(tput setaf 3)Removing ${dotgit_temp} and ${dotgit_dir}$(tput sgr0)"
+	rm -rfv "$dotgit_temp" "$dotgit_dir"
+} >&2
+
 
 # POSIX-compliant reasonable test to see if script was sourced, based on binary filenames of shells.
 # Source: https://stackoverflow.com/questions/2683279/how-to-detect-if-a-script-is-being-sourced
-sourced=0
 if [ -n "$BASH_VERSION" ]; then
 	(return 0 2>/dev/null) && sourced=1
 elif [ -n "$ZSH_EVAL_CONTEXT" ]; then
@@ -42,33 +44,36 @@ else
 	case "${0##*/}" in sh|-sh|dash|-dash) sourced=1;; esac
 fi
 
-# make sure script is sourced
-[ $sourced -eq 1 ]  || { _error "This file must be sourced!"; exit 1; }
+# if script wasn't sourced, it's safe to exit instead of return
+[ $sourced -eq 1 ]  || { error "This file must be sourced!"; exit 1; }
 
 # make sure git is installed
 if ! command -v /usr/bin/git >/dev/null 2>&1; then
-	_error "/usr/bin/git not found! Please install git."
+	error "/usr/bin/git not found! Please install git."
+	return 1
 fi
 
 # make sure the directories we will use don't already exist
-[ ! -e "$dotgit_dir"  ] || { _error "$dotgit_dir already exists! Either rename it, or edit the script."; return 1; }
-[ ! -e "$dotgit_temp" ] || { _error "$dotgit_temp already exists! Either rename it, or edit the script."; return 1; }
+[ ! -e "$dotgit_dir"  ] || { error "$dotgit_dir already exists! Either rename it, or edit the script."; return 1; }
+[ ! -e "$dotgit_temp" ] || { error "$dotgit_temp already exists! Either rename it, or edit the script."; return 1; }
 
 mkdir -p "$config_home" "$cache_home"
 
 # clone git repo!
 if ! /usr/bin/git clone --separate-git-dir="$dotgit_dir" "$repo_url" "$dotgit_temp"; then
-	_error "git clone failed. Check your internet connection, and also make sure git is installed." rmdirs
+	error "git clone failed; check your internet connection."
+	rmdirs
 	return 1
 fi
 
 # move files from temp dir to $HOME and rm the temp dir
-# leading '\' indicates to not use an alias (in this case to avoid the common cp='cp -i', which prompts before overwrites)
-\cp -frTv "$dotgit_temp" ~ && rm -rfv "$dotgit_temp" && . ~/.profile || { _error "Error cping or rming files!" rmdirs; return 1; }
+# command ignores aliases (in this case we want to avoid the common cp='cp -i', which prompts before overwrites)
+command cp -frTv "$dotgit_temp" ~ && rm -rfv "$dotgit_temp" && . ~/.profile || { error "Error cping or rming files!"; rmdirs; return 1; }
 
 if dotgit config status.showUntrackedFiles no >/dev/null 2>&1; then
-	_print_success "Dotfiles installed!"
+	print_success "Dotfiles installed!"
 else
-	_error "Unable to set 'dotgit' repo option! Perhaps check ~/.bash_aliases"
+	error "Unable to set 'dotgit' repo option! Perhaps check ~/.bash_aliases"
+	rmdirs
 	return 1
 fi
