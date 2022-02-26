@@ -76,7 +76,7 @@ fi
 # command ignores aliases (in this case we want to avoid the common cp='cp -i', which prompts before overwrites)
 command cp -rfvT "$dotfiles_temp" ~ && rm -rfv "$dotfiles_temp" && . ~/.profile || { error "Error cping or rming files!"; rmdirs; return 1; }
 
-if ! dotfiles config status.showUntrackedFiles no >/dev/null; then
+if ! dotgit config status.showUntrackedFiles no >/dev/null; then
 	error "Unable to set 'dotfiles' repo option! Perhaps check ~/.bash_aliases"
 	rmdirs
 	return 1
