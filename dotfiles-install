@@ -45,7 +45,7 @@ else
 fi
 
 # if script wasn't sourced, it's safe to exit instead of return
-[ $sourced -eq 1 ]  || { error "This file must be sourced!"; exit 1; }
+[ "$sourced" -eq 1 ]  || { error "This file must be sourced!"; exit 1; }
 
 # make sure git is installed
 if ! command -v /usr/bin/git >/dev/null 2>&1; then
