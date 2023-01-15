@@ -1,88 +1,216 @@
+
 # This file must be sourced from your current (POSIX-compliant) shell: do not run directly
+
+
+set_errexit=0
+set_nounset=0
+set_xtrace=0
+
+# check if problematic shell options are set; set them to original value when script is finished executing
+case "$-" in
+	*e*) set_errexit=1 ;;
+	*u*) set_nounset=1 ;;
+	*x*) set_xtrace=1 ;;
+esac
+
+set +o errexit
+set +o nounset
+set +o xtrace
+
 
 repo_url="https://github.com/Dillon7c7/Dotfiles"
 
-config_home="${HOME}/.config"
-cache_home="${HOME}/.cache"
+config_home="${XDG_CONFIG_HOME:-${HOME}/.config}"
+cache_home="${XDG_CACHE_HOME:-${HOME}/.cache}"
 
 dotfiles_dir="${config_home}/dotfiles.git"
 dotfiles_temp="${cache_home}/dotfiles-temp"
 
 sourced=0
+total_task_num=7
 
-# print success message to stdin
-print_success()
+
+# Restore shell options changed during this script's execution
+restore_shell_options()
 {
-	msg="$1"
-	printf '%b\n' "$(tput setaf 3)SUCCESS dotfiles-install: $(tput setaf 2)${msg}$(tput sgr0)"
+	if [ "${set_errexit}" -eq 1 ]; then
+		set -o errexit
+	fi
+	if [ "${set_nounset}" -eq 1 ]; then
+		set -o nounset
+	fi
+	if [ "${set_xtrace}" -eq 1 ]; then
+		set -o xtrace
+	fi
 }
 
 # print error message $1 to stderr
+# it's expected that the script will return after this function is called
 error()
 {
-	error_msg="$1"
-	printf '%b\n' "$(tput setaf 3)ERROR dotfiles-install: $(tput setaf 1)${error_msg}$(tput sgr0)"
+	error_msg="${1}"
+	printf '%s: %s\n' "${red}ERROR ${yel}dotfiles-install" "${cya}${error_msg}${clr}"
+	'restore_shell_options'
+
+} >&2
+
+# notify user of task execution
+status()
+{
+	# should be STARTING or COMPLETE
+	status_msg="${1}"
+
+	if [ "${status_msg}" = "STARTING" ]; then
+		printf '%s [%d/%d] %s: %s\n' "${mag}TASK" "${curr_task_num}" "${total_task_num}" "${yel}${status_msg}" "${cya}${curr_task}${clr}"
+	elif [ "${status_msg}" = "COMPLETE" ]; then
+		printf '%s [%d/%d] %s: %s\n' "${mag}TASK" "${curr_task_num}" "${total_task_num}" "${grn}${status_msg}" "${cya}${curr_task}${clr}"
+	fi
 } >&2
 
 # if the script fails at any point after the *dotfiles* dirs are created, remove them
 rmdirs()
 {
-	printf '%b\n' "$(tput setaf 3)Removing ${dotfiles_temp} and ${dotfiles_dir}$(tput sgr0)"
-	rm -rfv "$dotfiles_temp" "$dotfiles_dir"
+	printf '%s\n' "${yel}Removing ${dotfiles_temp} and ${dotfiles_dir}${clr}"
+	rm -fr "${dotfiles_temp}" "${dotfiles_dir}"
 } >&2
 
 
+# use colored output, if tput is installed
+if command -v tput >/dev/null 2>&1; then
+	red="$(tput setaf 1)"
+	grn="$(tput setaf 2)"
+	yel="$(tput setaf 3)"
+	mag="$(tput setaf 5)"
+	cya="$(tput setaf 6)"
+	clr="$(tput sgr0)"
+fi
+
 # POSIX-compliant reasonable test to see if script was sourced, based on binary filenames of shells.
 # Source: https://stackoverflow.com/questions/2683279/how-to-detect-if-a-script-is-being-sourced
-if [ -n "$BASH_VERSION" ]; then
+if [ -n "${BASH_VERSION}" ]; then
 	(return 0 2>/dev/null) && sourced=1
-elif [ -n "$ZSH_EVAL_CONTEXT" ]; then
-	case "$ZSH_EVAL_CONTEXT" in *:file) sourced=1;; esac
-elif [ -n "$KSH_VERSION" ]; then
-	[ "$(cd "$(dirname -- "$0")" && pwd -P)"/"$(basename -- "$0")" != "$(cd "$(dirname -- "${.sh.file}")" && pwd -P)"/"$(basename -- "${.sh.file}")" ] && sourced=1
+elif [ -n "${ZSH_EVAL_CONTEXT}" ]; then
+	case "${ZSH_EVAL_CONTEXT}" in *:file) sourced=1;; esac
+elif [ -n "${KSH_VERSION}" ]; then
+	[ "$(cd "$(dirname -- "${0}")" && pwd -P)"/"$(basename -- "${0}")" != "$(cd "$(dirname -- "${.sh.file}")" && pwd -P)"/"$(basename -- "${.sh.file}")" ] && sourced=1
 else
 	case "${0##*/}" in sh|-sh|dash|-dash) sourced=1;; esac
 fi
 
 # if script wasn't sourced, it's safe to exit instead of return
-[ "$sourced" -eq 1 ]  || { error "This file must be sourced!"; exit 1; }
+if [ "${sourced}" -ne 1 ]; then
+	'error' "This script must only be sourced !!!"
+	exit 1
+fi
 
 # make sure git is installed
-if ! command -v /usr/bin/git >/dev/null 2>&1; then
-	error "/usr/bin/git not found! Please install git."
+if ! command -v git >/dev/null 2>&1; then
+	'error' "git not found! Please install it"
 	return 1
 fi
 
 # if a git repository already exists in $HOME, don't make any changes
 if [ -d "${HOME}/.git" ]; then
-	error "${HOME}/.git directory exists! (Re)move the repository in $HOME to continue."
+	'error' "${HOME}/.git directory exists! (Re)move the repository in $HOME and source this script again"
 	return 1
 fi
 
 # make sure the directories we will use don't already exist
-[ ! -e "$dotfiles_dir"  ] || { error "$dotfiles_dir already exists! Either rename it, or edit the script."; return 1; }
-[ ! -e "$dotfiles_temp" ] || { error "$dotfiles_temp already exists! Either rename it, or edit the script."; return 1; }
+if [ -e "${dotfiles_dir}" ] || [ -e "${dotfiles_temp}" ]; then
+	'error' "'${dotfiles_dir}' and/or '${dotfiles_temp}' already exist! Rename them, or edit this script"
+	return 1
+fi
 
-mkdir -p "$config_home" "$cache_home"
+
+##### Actual system changes start below
+
+curr_task_num=0
+
+# create user config and cache dirs if they don't already exist
+curr_task="Installing ${config_home} and ${cache_home} directories, if they don't already exist"
+curr_task_num="$((curr_task_num+1))"
+
+'status' 'STARTING'
+if ! install -d -m 0700 -o "$(id -u)" -g "$(id -g)" "${config_home}" "${cache_home}"; then
+	'error' "Unable to create/modify ${config_home} and/or ${cache_home}"
+	return 1
+fi
+'status' 'COMPLETE'
 
 # clone git repo!
-if ! /usr/bin/git clone --separate-git-dir="$dotfiles_dir" "$repo_url" "$dotfiles_temp"; then
-	error "git clone failed; check your internet connection."
-	rmdirs
+curr_task="Cloning ${repo_url}"
+curr_task_num="$((curr_task_num+1))"
+
+'status' 'STARTING'
+if ! git clone --separate-git-dir="${dotfiles_dir}" "${repo_url}" "${dotfiles_temp}"; then
+	'error' "git clone failed; check your internet connection"
+	'rmdirs'
 	return 1
 fi
+'status' 'COMPLETE'
 
-# move files from temp dir to $HOME and rm the temp dir
+# cp files from temp dir to $HOME
 # command ignores aliases (in this case we want to avoid the common cp='cp -i', which prompts before overwrites)
-command cp -rfvT "$dotfiles_temp" ~ && rm -rfv "$dotfiles_temp" && . ~/.profile || { error "Error cping or rming files!"; rmdirs; return 1; }
+curr_task="Copying contents of ${dotfiles_temp} to ${HOME}/"
+curr_task_num="$((curr_task_num+1))"
 
-if ! dotgit config status.showUntrackedFiles no >/dev/null; then
-	error "Unable to set 'dotfiles' repo option! Perhaps check ~/.bash_aliases"
-	rmdirs
+'status' 'STARTING'
+if ! command cp -frvT "${dotfiles_temp}" "${HOME}/"; then
+	'error' "Couldn't copy files from ${dotfiles_temp} to ${HOME}"
+	'rmdirs'
 	return 1
 fi
+'status' 'COMPLETE'
+
+#  rm the temp dir
+curr_task="Removing ${dotfiles_temp}"
+curr_task_num="$((curr_task_num+1))"
+
+'status' 'STARTING'
+if ! rm -fr "${dotfiles_temp}"; then
+	'error' "Couldn't rm directory ${dotfiles_temp}"
+	'rmdirs'
+	return 1
+fi
+'status' 'COMPLETE'
+
+# source ~/.profile, so that the configs apply to the current shell
+curr_task="Sourcing ${HOME}/.profile"
+curr_task_num="$((curr_task_num+1))"
+
+'status' 'STARTING'
+if ! . "${HOME}/.profile"; then
+	'error' "Unable to source ${HOME}/.profile"
+	'rmdirs'
+	return 1
+fi
+'status' 'COMPLETE'
+
+curr_task="Setting dotfiles repo option: 'status.showUntrackedFiles no'"
+curr_task_num="$((curr_task_num+1))"
+
+'status' 'STARTING'
+if ! dotgit config status.showUntrackedFiles no >/dev/null; then
+	'error' "Unable to set 'dotfiles' repo option: 'status.showUntrackedFiles no'! Perhaps check ${HOME}/.bash_aliases"
+	'rmdirs'
+	return 1
+fi
+'status' 'COMPLETE'
 
 # the only entry in this file allows using 'git' under $HOME to modify the dotfiles repo; we don't want that
-rm -f "${HOME}/.git"
+curr_task="Removing file ${HOME}/.git"
+curr_task_num="$((curr_task_num+1))"
 
-print_success "Dotfiles installed!"
+'status' 'STARTING'
+if ! rm -f "${HOME}/.git"; then
+	'error' "Unable to rm ${HOME}/.git"
+	'rmdirs'
+	return 1
+fi
+'status' 'COMPLETE'
+
+
+printf '%s: %s\n' "${grn}SUCCESS ${yel}dotfiles-install" "${cya}Dotfiles installed!${clr}"
+'restore_shell_options'
+
+return 0
